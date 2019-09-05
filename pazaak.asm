@@ -163,7 +163,6 @@ movement:
 ;*
 ;***************************************************************************
 
-; Move right
 move_right:
     ld      a,  [_SPR0_X]   ; Get current x-coordinate
     cp      160             ; Sprite on the right edge?
@@ -174,7 +173,6 @@ move_right:
 
     ret
 
-; Move left
 move_left:
     ld      a,  [_SPR0_X]   ; Get current x-coordinate
     cp      8               ; Sprite on the left edge?
@@ -185,7 +183,6 @@ move_left:
 
     ret
 
-; Move up
 move_up:
     ld      a,  [_SPR0_Y]   ; Get current y-coordinate
     cp      16              ; Sprite on the top edge?
@@ -196,7 +193,6 @@ move_up:
 
     ret
 
-; Move down
 move_down:
     ld      a,  [_SPR0_Y]   ; Get current y-coordinate
     cp      152             ; Sprite on bottom edge?
