@@ -25,7 +25,7 @@ section "start", rom0[$0100]
 start:
     nop
     di
-    ld sp, $ffff  ; Aim pile at top of ram
+    ld  sp, $ffff  ; Aim pile at top of ram
 
 initialization:
     ; Palette colors from darkest to lightest (11 10 01 00)
@@ -59,7 +59,7 @@ initialization:
 
 .clean_bg:
     ld hl, _SCRN0
-    ld de, 32*32  ; Number of tiles on the background map
+    ld de, 32 * 32  ; Number of tiles on the background map
 
 .copy_bg:
     ; Tile 0 is the empty tile
@@ -74,7 +74,7 @@ initialization:
 
 .clean_sprites
     ld hl, _OAMRAM
-    ld de, 40*4  ; 40 sprites x 4 bytes each
+    ld de, 40 * 4  ; 40 sprites x 4 bytes each
 
 .copy_sprites
     ; Unused sprites will be offscreen
