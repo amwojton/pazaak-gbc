@@ -1,26 +1,20 @@
 ;*
-;* Messing around
+;* The pazaak minigame from Star Wars: Knights of the Old Republic, recreated for the Game Boy Color.
 ;*
-; Based on this tutorial: http://wiki.ladecadence.net/doku.php?id=tutorial_de_ensamblador
 
-INCLUDE "gbhw.inc"           ; Import file definitions
+include "gbhw.inc"
 
-; Define sprite constants
-_SPR0_Y   EQU _OAMRAM        ; Sprite Y 0 is the beginning of the sprite mem
-_SPR0_X   EQU _OAMRAM+1
-_SPR0_NUM EQU _OAMRAM+2
-_SPR0_ATT EQU _OAMRAM+3
+_SPR0_Y   equ _OAMRAM
+_SPR0_X   equ _OAMRAM+1
+_SPR0_NUM equ _OAMRAM+2
+_SPR0_ATT equ _OAMRAM+3
+_PAD      equ _RAM
 
-; Variable to save the state of the pad
-_PAD EQU _RAM                ; At the beginning of the internal RAM
-
-; The program begins here:
-SECTION "start",ROM0[$0100]
+section "start", rom0[$0100]
     nop
-    jp start
+    jp  start
 
-    ; Head of the ROM (Macro defined in gbhw.inc)
-    ROM_HEADER  ROM_NOMBC, ROM_SIZE_32KBYTE, RAM_SIZE_0KBYTE
+    ROM_HEADER ROM_NOMBC, ROM_SIZE_32KBYTE, RAM_SIZE_0KBYTE
 
 ;***************************************************************************
 ;*
@@ -28,276 +22,239 @@ SECTION "start",ROM0[$0100]
 ;*
 ;***************************************************************************
 
-; Actual start of program
 start:
     nop
-    di                       ; Disable interrupts
-    ld sp, $ffff             ; We aim pile atop the ram
+    di
+    ld sp, $ffff  ; Aim pile at top of ram
 
 initialization:
-    ld a, %11100100          ; Palette colors from the darkest to lighter, 11 10 01 00
-    ld [rBGP], a             ; We write this in the background palette register
-    ld [rOBP0], a            ; and sprite palette 0
+    ; Palette colors from darkest to lightest (11 10 01 00)
+    ld a, %11100100
+    ld [rBGP], a
+    ld [rOBP0], a
 
-    ; Create another palette to the palette 2 sprites, reverse to normal
+    ; Create another palette for the palette 2 sprites, as an inverse of the first
     ld a, %00011011
     ld [rOBP1], a
 
-    ld a, 0                  ; write 0 records scroll in X and Y
-    ld [rSCX], a             ; positioned so that the visible screen
-    ld [rSCY], a             ; at the beginning (upper left) of the fund.
+    ; Visible screen at beginning (top left) of fund
+    ld a, 0
+    ld [rSCX], a
+    ld [rSCY], a
 
-    call turn_off_lcd        ; We call the routine that turns off the LCD
+    call turn_off_lcd
 
-    ; We load the tiles in memory of tiles
-    ld hl, Tiles             ; HL loaded in the direction of our tile
-    ld de, _VRAM             ; address in the video memory
-    ld b, 32                 ; b = 32, number of bytes to copy (2 tiles)
+    ld hl, Tiles
+    ld de, _VRAM
+    ld b, 32  ; Number of bytes to copy (2 tiles)
 
-.loop_load:
-    ld  a,[hl]               ; load in the data pointed to by HL
-    ld  [de], a              ; and we put in the address pointed in DE
-    dec b                    ; decrement b, b = b-1
-    jr  z, .fin_loop_load    ; if b = 0, finished, nothing left to copy
-    inc hl                   ; We increased the read direction
-    inc de                   ; We increased the write direction
-    jr  .loop_load           ; we follow
+.load_data:
+    ld  a,[hl]   ; hl is read direction
+    ld  [de], a  ; de is write direction
+    dec b
+    jr  z, .clean_bg
+    inc hl
+    inc de
+    jr  .load_data
 
-.fin_loop_load:
-    ;  We clean the screen (fill entire background map), with tile 0
+.clean_bg:
     ld hl, _SCRN0
-    ld de, 32*32             ; number of tiles on the background map
+    ld de, 32*32  ; Number of tiles on the background map
 
-.loop_clean_bg:
-    ld  a, 0                 ; tile 0 is our empty tile
+.copy_bg:
+    ; Tile 0 is the empty tile
+    ld  a, 0
     ld  [hl], a
     dec de
+    ld  a, d
+    or  e
+    jp  z, .clean_sprites
+    inc hl
+    jp  .copy_bg
 
-    ; Now I have to check if it is zero, to see if I have it
-    ; finishes copying. dec not modify any flag, so I can not
-    ; check the zero flag directly, but that is zero, dye
-    ; They must be zero two, so I can make or including
-    ; and if the result is zero, both are zero.
-    ld  a, d                  ; d loaded in to
-    or  e                     ; and make a or e
-    jp  z, .fin_loop_clean_bg ; if d or e is zero, it is zero.
-    inc hl                    ; We increased the write direction
-    jp  .loop_clean_bg
+.clean_sprites
+    ld hl, _OAMRAM
+    ld de, 40*4  ; 40 sprites x 4 bytes each
 
-.fin_loop_clean_bg
-    ; Well, we have all the map tiles filled with tile 0
-    ; We clean the memory of sprites
-    ld hl, _OAMRAM           ; sprite attribute memory
-    ld de, 40*4              ; 40 sprites x 4 bytes each
-
-.loop_clean_sprites
-    ld  a, 0                 ; we will start fresh, so the sprites
-    ld  [hl], a              ; unused, will be offscreen
+.copy_sprites
+    ; Unused sprites will be offscreen
+    ld  a, 0
     dec de
+    ld  a, d
+    or  e
+    jp  z, .create_sprites
+    inc hl
+    jp  .copy_sprites
 
-    ; As in previous loop
-    ld  a, d                       ; d loaded in to a
-    or  e                          ; and make a or e
-    jp  z, .fin_loop_clean_sprites ; if d or e is zero, it is zero.
-    inc hl                         ; We increased the write direction
-    jp  .loop_clean_sprites
-
-.fin_loop_clean_sprites
-    ; Now we will create the sprite.
+.create_sprites
     ld a, 16
-    ld [_SPR0_Y], a          ; Y position of the sprite
+    ld [_SPR0_Y], a
     ld a, 8
-    ld [_SPR0_X], a          ; X position of the sprite
+    ld [_SPR0_X], a
     ld a, 1
-    ld [_SPR0_NUM], a        ; number of tile on the table that we will use tiles
+    ld [_SPR0_NUM], a  ; Tile number from the table
     ld a, 0
-    ld [_SPR0_ATT], a        ; special attributes, so far nothing.
+    ld [_SPR0_ATT], a  ; Special attributes (none for now)
 
     ; Configure and activate the display
     ld a, LCDCF_ON|LCDCF_BG8000|LCDCF_BG9800|LCDCF_BGON|LCDCF_OBJ8|LCDCF_OBJON
     ld [rLCDC], a
 
-; Main loop
-movement:
-    ; We read the pad
+main_program_loop:
     call read_pad
-    ; first, we wait for the VBlank, since we can not change
-    ; VRAM out of it, or weird things will happen
 
+; Changing vram outside of vblank causes Very Bad Things, so wait for it
 .wait:
     ld a, [rLY]
     cp 145
     jr nz, .wait
 
-    ; Perform an action based on which button was pressed
-    ld   a, [_PAD]           ; We charge status pad
-    and  %00010000           ; Control pad right
-    call nz, move_right      ; if the result is not zero, there had 1
-
+    ; Control pad down
     ld   a, [_PAD]
-    and  %00100000           ; Control pad left
-    call nz, move_left
-
-    ld   a, [_PAD]
-    and  %01000000           ; Control pad up
-    call nz, move_up
-
-    ld   a, [_PAD]
-    and  %10000000           ; Control pad down
+    and  %10000000
     call nz, move_down
 
+    ; Control pad up
     ld   a, [_PAD]
-    and  %00000001           ; A button
+    and  %01000000
+    call nz, move_up
+
+    ; Control pad left
+    ld   a, [_PAD]
+    and  %00100000
+    call nz, move_left
+
+    ; Control pad right
+    ld   a, [_PAD]
+    and  %00010000
+    call nz, move_right
+
+    ; A button
+    ld   a, [_PAD]
+    and  %00000001
     call nz, change_palette
 
-    ; Small delay
     call time_delay
-
-    ; We start
-    jr movement
-
+    jr   main_program_loop
 
 ;***************************************************************************
 ;*
-;* Movement routines
+;* Helper routines
 ;*
 ;***************************************************************************
 
-move_right:
-    ld      a,  [_SPR0_X]   ; Get current x-coordinate
-    cp      160             ; Sprite on the right edge?
-    ret     z               ; If on the edge, return
-
-    add     a, 8            ; Move x-coordinate right
-    ld      [_SPR0_X], a    ; Save x-coordinate
-
-    ret
-
-move_left:
-    ld      a,  [_SPR0_X]   ; Get current x-coordinate
-    cp      8               ; Sprite on the left edge?
-    ret     z               ; If on the edge, return
-
-    sub     8               ; Move x-coordinate right
-    ld      [_SPR0_X], a    ; Save x-coordinate
-
-    ret
-
-move_up:
-    ld      a,  [_SPR0_Y]   ; Get current y-coordinate
-    cp      16              ; Sprite on the top edge?
-    ret     z               ; If on the edge, return
-
-    sub     8               ; Move y-coordinate up
-    ld      [_SPR0_Y], a    ; Save y-coordinate
-
-    ret
-
-move_down:
-    ld      a,  [_SPR0_Y]   ; Get current y-coordinate
-    cp      152             ; Sprite on bottom edge?
-    ret     z               ; If on the edge, return
-
-    add     a, 8            ; Move y-coordinate down
-    ld      [_SPR0_Y], a    ; Save y-coordinate
-
-    ret
-
-;***************************************************************************
-;*
-;* Controls
-;*
-;***************************************************************************
-
-; Change palette
-change_palette:
-    ld      a, [_SPR0_ATT]
-    and     %00010000       ; in bit 4, is the number of palette
-    jr      z, .palette0    ; If zero was selected palette 0
-
-    ; if not, was selected blade 1
-    ld      a, [_SPR0_ATT]
-    res     4, a            ; we zero bit 4, selecting the palette 0
-    ld      [_SPR0_ATT], a  ; We keep attributes
-
-    call    time_delay      ; the change is very fast, we will wait a bit
-    ret                     ; return
-.palette0:
-    ld      a, [_SPR0_ATT]
-    set     4, a            ; We put one bit 4, selecting blade 1
-    ld      [_SPR0_ATT], a  ; We keep attributes
-
-    call    time_delay
-    ret                     ; return
-
-; Read the control pad
-read_pad:
-    ld      a, %00100000    ; bit 4-0, 5-1 bit (on control pad, no buttons)
-    ld      [rP1], a
-
-    ; now we read the status of the control pad, to avoid bouncing
-    ; We do several readings
-    ld      a, [rP1]
-    ld      a, [rP1]
-    ld      a, [rP1]
-    ld      a, [rP1]
-
-    and     $0F             ; only care about the bottom 4 bits.
-    swap    a               ; lower and upper exchange.
-    ld      b, a            ; We keep control pad status in b
-
-    ; we go for the buttons
-    ld      a, %00010000    ; bit 4 to 1, bit 5 to 0 (enabled buttons, not control pad)
-    ld      [rP1], a
-
-    ; read several times to avoid bouncing
-    ld      a, [rP1]
-    ld      a, [rP1]
-    ld      a, [rP1]
-    ld      a, [rP1]
-
-    ; we at A, the state of the buttons
-    and     $0F             ; only care about the bottom 4 bit
-    or      b               ; or make a to b, to "meter" in Part
-                            ; A superior, control pad status.
-
-    ; we now have at A, the state of all, we complement and
-    ; store it in the variable
-    cpl
-    ld      [_PAD], a
-
-    ret
-
-; LCD shutdown routine
 turn_off_lcd:
     ld   a, [rLCDC]
-    rlca                     ; Sets the high bit of LCDC in the carry flag
-    ret  nc                  ; Display is already off, again
+    rlca
+    ret  nc  ; Display is already off
 
-; Display can only be turned off in VBlank
 .wait_for_vblank
     ld a, [rLY]
     cp 145
     jr nz, .wait_for_vblank
 
-    ; Currently in VBlank, so turn off LCD
-    ld  a, [rLCDC]           ; Load contents of LCDC into a
-    res 7, a                 ; Reset bit 7
-    ld  [rLCDC], a           ; Write contents of a into LCDC register
-
+    ; Currently in vblank, so turn off LCD
+    ld  a, [rLCDC]
+    res 7, a
+    ld  [rLCDC], a
     ret
 
-; rdelay routine
+read_pad:
+    ; Bit 4 to 0, bit 5 to 1 (control pad only)
+    ld a, %00100000
+    ld [rP1], a
+
+    ; Read control pad several times to avoid bouncing
+    ld a, [rP1]
+    ld a, [rP1]
+    ld a, [rP1]
+    ld a, [rP1]
+
+    ; Only care about the bottom 4 bits
+    and  $0F
+    swap a
+    ld   b, a
+
+    ; Bit 4 to 1, bit 5 to 0 (buttons only)
+    ld a, %00010000
+    ld [rP1], a
+
+    ld a, [rP1]
+    ld a, [rP1]
+    ld a, [rP1]
+    ld a, [rP1]
+
+    and $0F
+
+    ; Combine control pad and buttons and take complement
+    or  b
+    cpl
+    ld  [_PAD], a
+    ret
+
+move_down:
+    ld  a, [_SPR0_Y]
+    cp  152             
+    ret z  ; Already at bottom edge of screen
+    add a, 8
+    ld  [_SPR0_Y], a
+    ret
+
+move_up:
+    ld  a, [_SPR0_Y]
+    cp  16
+    ret z  ; Already at top edge of screen
+    sub 8
+    ld  [_SPR0_Y], a
+    ret
+
+move_left:
+    ld  a, [_SPR0_X]
+    cp  8
+    ret z  ; Already at left edge of screen
+    sub 8
+    ld  [_SPR0_X], a
+    ret
+
+move_right:
+    ld  a, [_SPR0_X]
+    cp  160
+    ret z  ; Already at right edge of screen
+    add a, 8
+    ld  [_SPR0_X], a
+    ret
+
+change_palette:
+    ld  a, [_SPR0_ATT]
+    and %00010000     ; Bit 4 is the number of the palette
+    jr  z, .palette0  ; Palette 0 was selected
+
+    ; Else palette 1 was selected
+    ld  a, [_SPR0_ATT]
+    res 4, a  ; Zero bit 4, selecting palette 0
+    ld  [_SPR0_ATT], a
+    call time_delay
+    ret
+
+.palette0:
+    ld  a, [_SPR0_ATT]
+    set 4, a  ; Set bit 4, selecting palette 1
+    ld  [_SPR0_ATT], a
+    call time_delay
+    ret
+
 time_delay:
-    ld      de, 6000        ; number of times to execute the loop
-.delay:
-    dec     de              ; decrement
-    ld      a, d            ; see if zero
-    or      e
-    jr      z, .fin_delay
+    ld de, 6000
+
+.loop:
+    dec de
+    ld  a, d
+    or  e
+    jr  z, .exit_loop
     nop
-    jr      .delay
-.fin_delay:
+    jr  .loop
+
+.exit_loop:
     ret
 
 ;***************************************************************************
@@ -308,10 +265,10 @@ time_delay:
 
 Tiles:
     ; Background
-    DB  $FF, $00, $81, $00, $81, $00, $81, $00
-    DB  $81, $00, $81, $00, $81, $00, $FF, $00
+    db  $FF, $00, $81, $00, $81, $00, $81, $00
+    db  $81, $00, $81, $00, $81, $00, $FF, $00
 
     ; Cursor
-    DB  $00, $00, $7E, $7E, $7E, $7E, $7E, $7E
-    DB  $7E, $7E, $7E, $7E, $7E, $7E, $00, $00
+    db  $00, $00, $7E, $7E, $7E, $7E, $7E, $7E
+    db  $7E, $7E, $7E, $7E, $7E, $7E, $00, $00
 EndTiles:
