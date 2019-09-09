@@ -79,6 +79,7 @@ initialization:
 .copy_sprites
     ; Unused sprites will be offscreen
     ld  a, 0
+    ld  [hl], a
     dec de
     ld  a, d
     or  e
