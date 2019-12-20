@@ -102,41 +102,50 @@ initialization:
     ld [rLCDC], a
 
 main_program_loop:
-    call read_pad
+    call read_input
 
-; Changing vram outside of vblank causes Very Bad Things, so wait for it
-.wait:
-    ld a, [rLY]
-    cp 145
-    jr nz, .wait
+    ; Changing vram outside of vblank causes Very Bad Things, so wait for it
+    call wait_for_vblank
 
     ; Control pad down
-    ld   a, [_PAD]
-    and  %10000000
+    ld a, [_PAD]
+    and PADF_DOWN
     call nz, move_down
 
     ; Control pad up
-    ld   a, [_PAD]
-    and  %01000000
+    ld a, [_PAD]
+    and PADF_UP
     call nz, move_up
 
     ; Control pad left
-    ld   a, [_PAD]
-    and  %00100000
+    ld a, [_PAD]
+    and PADF_LEFT
     call nz, move_left
 
     ; Control pad right
-    ld   a, [_PAD]
-    and  %00010000
+    ld a, [_PAD]
+    and PADF_RIGHT
     call nz, move_right
 
+    ; Start button
+    ld a, [_PAD]
+    and PADF_START
+
+    ; Select button
+    ld a, [_PAD]
+    and PADF_SELECT
+
+    ; B button
+    ld a, [_PAD]
+    and PADF_B
+
     ; A button
-    ld   a, [_PAD]
-    and  %00000001
+    ld a, [_PAD]
+    and PADF_A
     call nz, change_palette
 
     call time_delay
-    jr   main_program_loop
+    jr main_program_loop
 
 ;***************************************************************************
 ;*
@@ -145,14 +154,11 @@ main_program_loop:
 ;***************************************************************************
 
 turn_off_lcd:
-    ld   a, [rLCDC]
+    ld a, [rLCDC]
     rlca
-    ret  nc  ; Display is already off
+    ret nc  ; Display is already off
 
-.wait_for_vblank
-    ld a, [rLY]
-    cp 145
-    jr nz, .wait_for_vblank
+    call wait_for_vblank
 
     ; Currently in vblank, so turn off LCD
     ld  a, [rLCDC]
@@ -160,37 +166,29 @@ turn_off_lcd:
     ld  [rLCDC], a
     ret
 
-read_pad:
-    ; Bit 4 to 0, bit 5 to 1 (control pad only)
+read_input:
+    ; Control pad
     ld a, %00100000
     ld [rP1], a
-
-    ; Read control pad several times to avoid bouncing
+    rept 6  ; Read control pad several times to avoid bouncing
     ld a, [rP1]
-    ld a, [rP1]
-    ld a, [rP1]
-    ld a, [rP1]
-
-    ; Only care about the bottom 4 bits
-    and  $0F
+    endr
+    and %1111  ; Only care about the bottom 4 bits
     swap a
-    ld   b, a
+    ld b, a
 
-    ; Bit 4 to 1, bit 5 to 0 (buttons only)
+    ; Buttons
     ld a, %00010000
     ld [rP1], a
-
+    rept 10
     ld a, [rP1]
-    ld a, [rP1]
-    ld a, [rP1]
-    ld a, [rP1]
-
-    and $0F
-
-    ; Combine control pad and buttons and take complement
-    or  b
+    endr
+    and %1111
+    
+    ; Combine control pad and buttons, and take complement
+    or b
     cpl
-    ld  [_PAD], a
+    ld [_PAD], a
     ret
 
 move_down:
@@ -238,9 +236,9 @@ change_palette:
     ret
 
 .palette0:
-    ld  a, [_SPR0_ATT]
+    ld a, [_SPR0_ATT]
     set 4, a  ; Set bit 4, selecting palette 1
-    ld  [_SPR0_ATT], a
+    ld [_SPR0_ATT], a
     call time_delay
     ret
 
@@ -249,13 +247,20 @@ time_delay:
 
 .loop:
     dec de
-    ld  a, d
-    or  e
-    jr  z, .exit_loop
+    ld a, d
+    or e
+    jr z, .exit_loop
     nop
-    jr  .loop
+    jr .loop
 
 .exit_loop:
+    ret
+
+wait_for_vblank:
+.loop
+    ld a, [rLY]
+    cp 145
+    jr nz, .loop
     ret
 
 ;***************************************************************************
